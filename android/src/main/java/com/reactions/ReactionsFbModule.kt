@@ -7,7 +7,7 @@ import java.util.*
 class ReactionsFbModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     override fun getName(): String {
-        return "CustomNative"
+        return "ReactNativeReactionsFb"
     }
 
     override fun getConstants(): Map<String, Any>? {
@@ -18,7 +18,7 @@ class ReactionsFbModule(reactContext: ReactApplicationContext) : ReactContextBas
     }
 
     @ReactMethod
-    fun Toastshow(message: String, duration: Int) {
+    fun Toastshow(message: CharSequence, duration: Int) {
         Toast.makeText(reactApplicationContext, message, duration).show()
     }
 
