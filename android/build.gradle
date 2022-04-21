@@ -1,23 +1,3 @@
-buildscript {
-    repositories {
-        google()
-        jcenter()
-    }
-
-    dependencies {
-        // Matches recent template from React Native (0.59)
-        // https://github.com/facebook/react-native/blob/0.59-stable/template/android/build.gradle#L16
-        classpath 'com.android.tools.build:gradle:3.3.2'
-    }
-}
-
-apply plugin: 'com.android.library'
-apply plugin: 'maven'
-
-def safeExtGet(prop, fallback) {
-    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
-}
-
 // Matches values in recent template from React Native (0.59)
 // https://github.com/facebook/react-native/blob/0.59-stable/template/android/build.gradle#L5-L9
 def DEFAULT_COMPILE_SDK_VERSION = 28
@@ -25,7 +5,53 @@ def DEFAULT_BUILD_TOOLS_VERSION = "28.0.3"
 def DEFAULT_MIN_SDK_VERSION = 16
 def DEFAULT_TARGET_SDK_VERSION = 28
 
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'maven'
+
+buildscript {
+    ext.kotlin_version = '1.3.72'
+    ext.koin_version = '2.1.6'
+
+    // The Android Gradle plugin is only required when opening the android folder stand-alone.
+    // This avoids unnecessary downloads and potential conflicts when the library is included as a
+    // module dependency in an application project.
+    // ref: https://docs.gradle.org/current/userguide/tutorial_using_tasks.html#sec:build_script_external_dependencies
+    if (project == rootProject) {
+        repositories {
+            google()
+            jcenter()
+        }
+
+        dependencies {
+            // Matches recent template from React Native (0.59)
+            // https://github.com/facebook/react-native/blob/0.59-stable/template/android/build.gradle#L16
+            classpath 'com.android.tools.build:gradle:3.3.2'
+        }
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'maven'
+
 android {
+  packagingOptions {
+     exclude 'META-INF/LICENSE.txt'
+     exclude 'META-INF/NOTICE.txt'
+     exclude 'META-INF/NOTICE'
+     exclude 'META-INF/LICENSE'
+     exclude 'META-INF/DEPENDENCIES'
+  }
   compileSdkVersion safeExtGet('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION)
   buildToolsVersion safeExtGet('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION)
 
@@ -34,6 +60,7 @@ android {
     targetSdkVersion safeExtGet('targetSdkVersion', DEFAULT_TARGET_SDK_VERSION)
     versionCode 1
     versionName "1.0"
+    multiDexEnabled true
   }
   lintOptions {
     abortOnError false
@@ -41,17 +68,33 @@ android {
 }
 
 repositories {
+    // ref: https://www.baeldung.com/maven-local-repository
+    mavenLocal()
     maven {
         // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-        // Matches recent template from React Native (0.59)
-        // https://github.com/facebook/react-native/blob/0.59-stable/template/android/build.gradle#L30
-        url "$projectDir/../node_modules/react-native/android"
+        url "$rootDir/../node_modules/react-native/android"
     }
-    mavenCentral()
+    maven {
+        // Android JSC is installed from npm
+        url "$rootDir/../node_modules/jsc-android/dist"
+    }
+    google()
+    jcenter()
 }
 
 dependencies {
-    compile 'com.facebook.react:react-native:+'
+    implementation fileTree(dir: "libs", include: ["*.jar"])
+    implementation 'com.facebook.react:react-native:+'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation 'com.android.support:multidex:1.0.3'
+
+    //Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.7'
+
+    //Koin
+    implementation "org.koin:koin-core:$koin_version"
+    implementation "org.koin:koin-android:$koin_version"
+    implementation "org.koin:koin-android-scope:$koin_version"
 }
 
 def configureReactNativePom(def pom) {
@@ -61,7 +104,7 @@ def configureReactNativePom(def pom) {
         name packageJson.title
         artifactId packageJson.name
         version = packageJson.version
-        group = "com.reactlibrary"
+        group = "com.reactions"
         description packageJson.description
         url packageJson.repository.baseUrl
 
@@ -104,8 +147,10 @@ afterEvaluate { project ->
 
     android.libraryVariants.all { variant ->
         def name = variant.name.capitalize()
-        task "jar${name}"(type: Jar, dependsOn: variant.javaCompile) {
-            from variant.javaCompile.destinationDir
+        def javaCompileTask = variant.javaCompileProvider.get()
+
+        task "jar${name}"(type: Jar, dependsOn: javaCompileTask) {
+            from javaCompileTask.destinationDir
         }
     }
 
